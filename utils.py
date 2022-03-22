@@ -11,22 +11,13 @@ jspringsecurity = 'https://learn.tsinghua.edu.cn/b/j_spring_security_thauth_roam
 getCurrentAndNextSemester = 'https://learn.tsinghua.edu.cn/b/kc/zhjw_v_code_xnxq/getCurrentAndNextSemester?_csrf=%s'
 loadCourseBySemesterId = 'https://learn.tsinghua.edu.cn/b/wlxt/kc/v_wlkc_xs_xkb_kcb_extend/student/loadCourseBySemesterId/%s?timestamp=%s&_csrf=%s'
 downloadfileurl = 'https://learn.tsinghua.edu.cn/b/wlxt/kj/wlkc_kjxxb/student/downloadFile?sfgk=0&_csrf=%s&wjid=%s'
-getfileinfourl = 'https://learn.tsinghua.edu.cn/b/wlxt/kj/wlkc_kjxxb/student/kjxxbByWlkcidAndSizeForStudent?wlkcid=%s&size=5&_csrf=%s'
-
-
-class course(object):
-    def __init__(self, kcm, wlkcid):
-        super(course, self).__init__()
-        self.name = kcm
-        self.id = wlkcid
+getfileinfourl = 'https://learn.tsinghua.edu.cn/b/wlxt/kj/wlkc_kjxxb/student/kjxxbByWlkcidAndSizeForStudent?wlkcid=%s&size=50&_csrf=%s'
 
 
 class THUer(object):
     def __init__(self, username, password):
         super(THUer, self).__init__()
-        self.secret = {}
-        self.secret['i_user'] = username
-        self.secret['i_pass'] = password
+        self.secret = {'i_user': username, 'i_pass': password}
         self.cookie = {}
         self.ticket = ''
         self.semester = ''
@@ -52,37 +43,68 @@ class THUer(object):
 
         # jspring_security sign and then we get the index html!!!
         js = requests.get(jspringsecurity % (self.ticket,), cookies=self.cookie)
+        self.getcourses()
 
     def getcourses(self):
         self.semester = \
-        eval(requests.get(getCurrentAndNextSemester % (self.cookie['XSRF-TOKEN'],), cookies=self.cookie).text)[
-            'result']['id']
+            eval(requests.get(getCurrentAndNextSemester % (self.cookie['XSRF-TOKEN'],), cookies=self.cookie).text)[
+                'result']['id']
         coursetemp = json.loads(
             requests.get(loadCourseBySemesterId % (self.semester, str(int(time.time())), self.cookie['XSRF-TOKEN']),
                          cookies=self.cookie).text)
-        self.courselist = coursetemp['resultList']
-
-    def getcoursefileinfo(self, wlkcid):
-        try:
-            filelist = \
-            json.loads(requests.get(getfileinfourl % (wlkcid, self.cookie['XSRF-TOKEN']), cookies=self.cookie).text)[
-                'object']
-            return filelist
-        except:
-            print(requests.get(getfileinfourl % (wlkcid, self.cookie['XSRF-TOKEN'])).text)
-
-    def getonecoursefiledownload(self, kcid, path=''):
-        flist = self.getcoursefileinfo(kcid)
-        for _ in flist:
-            self.downloadfilebyid(_['wjid'], path + _['bt'] + '.' + _['wjlx'])
+        for _ in coursetemp['resultList']:
+            self.courselist.append(course(_['kcm'], _['wlkcid'], self))
 
     def getallfiledownload(self):
         for c in self.courselist:
-            if not os.path.exists(c['kcm']):
-                os.mkdir(c['kcm'])
-            self.getonecoursefiledownload(c['wlkcid'], (c['kcm'] + '/'))
+            c.downloadmyfiles()
 
-    def downloadfilebyid(self, wjid, path='undefined.pdf'):
-        resp = requests.get(downloadfileurl % (self.cookie['XSRF-TOKEN'], wjid), cookies=self.cookie)
-        with open(path, 'wb') as f:
-            f.write(resp.content)
+
+class course(object):
+    def __init__(self, kcm, wlkcid, parent: THUer):
+        super(course, self).__init__()
+        self.name = kcm
+        self.id = wlkcid
+        self.parent = parent
+        self.filelist = []
+        if not os.path.exists(self.name):
+            os.mkdir(self.name)
+        self.getmyfiles()
+
+    def getmyfiles(self):
+        fltmp = json.loads(requests.get(getfileinfourl % (self.id, self.parent.cookie['XSRF-TOKEN']),
+                                        cookies=self.parent.cookie).text)['object']
+        for _ in fltmp:
+            self.filelist.append(onlinefile(_['wjid'], _['bt'], _['wjlx'], self))
+
+    def downloadmyfiles(self):
+        for _ in self.filelist:
+            _.download(self.name)
+
+
+class onlinefile(object):
+    def __init__(self, wjid, bt, wjlx, parent: course, downloaded=False):
+        super(onlinefile, self).__init__()
+        self.wjid = wjid
+        self.bt = bt
+        self.wjlx = wjlx
+        self.parent = parent
+        self.downloaded = downloaded
+
+    def download(self, path):
+        downloadfile(self, self.parent.parent.cookie, path)
+
+
+def downloadfile(fileobject: onlinefile, cookie, path, check=True):
+    print(
+        'download %s to %s from %s' % (fileobject.bt, path, downloadfileurl % (cookie['XSRF-TOKEN'], fileobject.wjid)))
+    fname = './' + path + '/' + fileobject.bt + '.' + fileobject.wjlx
+    if check:
+        if os.path.exists(fname):
+            print('already completed')
+            return
+    resp = requests.get(downloadfileurl % (cookie['XSRF-TOKEN'], fileobject.wjid), cookies=cookie)
+    if not os.path.exists(path):
+        os.makedirs(path)
+    with open(fname, 'wb') as f:
+        f.write(resp.content)

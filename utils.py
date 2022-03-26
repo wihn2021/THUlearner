@@ -1,8 +1,6 @@
 import requests
-import bs4
 import json
 import re
-import time
 import os
 
 idlogin = 'https://id.tsinghua.edu.cn/do/off/ui/auth/login/post/bb5df85216504820be7bba2b0ae1535b/0?/login.do'
@@ -36,8 +34,7 @@ class THUer(object):
 
         # login id.tsinghua.edu.cn & get ticket
         idloginres = requests.post(idlogin, data=self.secret)
-        ana_idlogin = bs4.BeautifulSoup(idloginres.text, features='lxml')
-        url_with_ticket = ana_idlogin.a['href']
+        url_with_ticket = re.search('<a href="(.*)">',idloginres.text).group(1)
         p2 = requests.get(url_with_ticket, cookies=self.cookie)
         self.ticket = re.search('ticket=(.*)', url_with_ticket).group(1)
 

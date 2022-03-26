@@ -12,6 +12,7 @@ loadCourseBySemesterId = 'https://learn.tsinghua.edu.cn/b/wlxt/kc/v_wlkc_xs_xkb_
 downloadfileurl = 'https://learn.tsinghua.edu.cn/b/wlxt/kj/wlkc_kjxxb/student/downloadFile?sfgk=0&_csrf=%s&wjid=%s'
 getfileinfourl = 'https://learn.tsinghua.edu.cn/b/wlxt/kj/wlkc_kjxxb/student/kjxxbByWlkcidAndSizeForStudent?wlkcid=%s&size=50&_csrf=%s'
 homeworkunhandled = 'https://learn.tsinghua.edu.cn/b/wlxt/kczy/zy/student/zyListWj?_csrf=%s&_csrf=%s'
+unspecifieddata = 'aoData=[{"name":"sEcho","value":1},{"name":"iColumns","value":8},{"name":"sColumns","value":",,,,,,,"},{"name":"iDisplayStart","value":0},{"name":"iDisplayLength","value":"30"},{"name":"mDataProp_0","value":"wz"},{"name":"bSortable_0","value":false},{"name":"mDataProp_1","value":"bt"},{"name":"bSortable_1","value":true},{"name":"mDataProp_2","value":"mxdxmc"},{"name":"bSortable_2","value":true},{"name":"mDataProp_3","value":"zywcfs"},{"name":"bSortable_3","value":true},{"name":"mDataProp_4","value":"kssj"},{"name":"bSortable_4","value":true},{"name":"mDataProp_5","value":"jzsj"},{"name":"bSortable_5","value":true},{"name":"mDataProp_6","value":"jzsj"},{"name":"bSortable_6","value":true},{"name":"mDataProp_7","value":"function"},{"name":"bSortable_7","value":false},{"name":"iSortCol_0","value":5},{"name":"sSortDir_0","value":"desc"},{"name":"iSortCol_1","value":6},{"name":"sSortDir_1","value":"desc"},{"name":"iSortingCols","value":2},{"name":"wlkcid","value":"%s"}]'
 
 
 class THUer(object):
@@ -30,21 +31,27 @@ class THUer(object):
               "text": "loginAccount=" + self.secret['i_user']}
         p1 = requests.post(learnlogin, data=h1)
         setcoo = p1.headers['set-cookie']
-        self.cookie['XSRF-TOKEN'] = re.search('^XSRF-TOKEN=([^;]*)', setcoo).group(1)
-        self.cookie['JSESSIONID'] = re.search('JSESSIONID=([^;]*)', setcoo).group(1)
-        self.cookie['serverid'] = re.search('serverid=([^;]*)', setcoo).group(1)
+        self.cookie['XSRF-TOKEN'] = re.search(
+            '^XSRF-TOKEN=([^;]*)', setcoo).group(1)
+        self.cookie['JSESSIONID'] = re.search(
+            'JSESSIONID=([^;]*)', setcoo).group(1)
+        self.cookie['serverid'] = re.search(
+            'serverid=([^;]*)', setcoo).group(1)
 
         # login id.tsinghua.edu.cn & get ticket
         idloginres = requests.post(idlogin, data=self.secret)
-        url_with_ticket = re.search('<a href="(.*)">',idloginres.text).group(1)
+        url_with_ticket = re.search(
+            '<a href="(.*)">', idloginres.text).group(1)
         p2 = requests.get(url_with_ticket, cookies=self.cookie)
         self.ticket = re.search('ticket=(.*)', url_with_ticket).group(1)
 
         # jspring_security sign and then we get the index html!!!
-        js = requests.get(jspringsecurity % (self.ticket,), cookies=self.cookie)
+        js = requests.get(jspringsecurity %
+                          (self.ticket,), cookies=self.cookie)
         self.getcourses()
 
     def getcourses(self):
+        self.courselist = []
         self.semester = \
             eval(requests.get(getCurrentAndNextSemester % (self.cookie['XSRF-TOKEN'],), cookies=self.cookie).text)[
                 'result']['id']
@@ -69,16 +76,30 @@ class course(object):
         if not os.path.exists(self.name):
             os.mkdir(self.name)
         self.getmyfiles()
+        self.homeworklist = []
+        self.getmyhws()
 
     def getmyfiles(self):
         fltmp = json.loads(requests.get(getfileinfourl % (self.id, self.parent.cookie['XSRF-TOKEN']),
                                         cookies=self.parent.cookie).text)['object']
         for _ in fltmp:
-            self.filelist.append(onlinefile(_['wjid'], _['bt'], _['wjlx'], self))
+            self.filelist.append(onlinefile(
+                _['wjid'], _['bt'], _['wjlx'], self))
 
     def downloadmyfiles(self):
         for _ in self.filelist:
             _.download(self.name)
+
+    def getmyhws(self):
+        self.homeworklist=[]
+        head = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest', 'X-XSRF-TOKEN': self.parent.cookie['XSRF-TOKEN']}
+        resp = requests.post(homeworkunhandled % (self.parent.cookie['XSRF-TOKEN'], self.parent.cookie['XSRF-TOKEN']),
+                             cookies=self.parent.cookie, data=unspecifieddata % (self.id,), headers=head).text
+        hwtemp = json.loads(resp)['object']['aaData']
+        for _ in hwtemp:
+            self.homeworklist.append(
+                homework(_['xszyid'], _['bt'], _['zyid'], _['jzsj'], self))
 
 
 class onlinefile(object):
@@ -102,8 +123,26 @@ def downloadfile(fileobject: onlinefile, cookie, path, check=True):
         if os.path.exists(fname):
             print('already completed')
             return
-    resp = requests.get(downloadfileurl % (cookie['XSRF-TOKEN'], fileobject.wjid), cookies=cookie)
+    resp = requests.get(downloadfileurl % (
+        cookie['XSRF-TOKEN'], fileobject.wjid), cookies=cookie)
     if not os.path.exists(path):
         os.makedirs(path)
     with open(fname, 'wb') as f:
         f.write(resp.content)
+
+
+class homework(object):
+    def __init__(self, xszyid, bt, zyid, jzsj, parent: course, handled=False):
+        super(homework, self).__init__()
+        self.xszyid = xszyid
+        self.bt = bt
+        self.zyid = zyid
+        self.jzsj = jzsj
+        self.parent = parent
+        self.handled = handled
+
+    def __str__(self) -> str:
+        return '%s %s %s %s' % (self.bt, self.zyid, self.jzsj, self.handled)
+
+    def handinafile(path:str,zyid):
+        pass

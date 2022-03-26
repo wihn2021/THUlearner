@@ -2,6 +2,7 @@ import requests
 import json
 import re
 import os
+import time
 
 idlogin = 'https://id.tsinghua.edu.cn/do/off/ui/auth/login/post/bb5df85216504820be7bba2b0ae1535b/0?/login.do'
 learnlogin = 'https://learn.tsinghua.edu.cn/f/loginAccountSave'
@@ -10,6 +11,7 @@ getCurrentAndNextSemester = 'https://learn.tsinghua.edu.cn/b/kc/zhjw_v_code_xnxq
 loadCourseBySemesterId = 'https://learn.tsinghua.edu.cn/b/wlxt/kc/v_wlkc_xs_xkb_kcb_extend/student/loadCourseBySemesterId/%s?timestamp=%s&_csrf=%s'
 downloadfileurl = 'https://learn.tsinghua.edu.cn/b/wlxt/kj/wlkc_kjxxb/student/downloadFile?sfgk=0&_csrf=%s&wjid=%s'
 getfileinfourl = 'https://learn.tsinghua.edu.cn/b/wlxt/kj/wlkc_kjxxb/student/kjxxbByWlkcidAndSizeForStudent?wlkcid=%s&size=50&_csrf=%s'
+homeworkunhandled = 'https://learn.tsinghua.edu.cn/b/wlxt/kczy/zy/student/zyListWj?_csrf=%s&_csrf=%s'
 
 
 class THUer(object):

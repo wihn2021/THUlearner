@@ -13,6 +13,8 @@ downloadfileurl = 'https://learn.tsinghua.edu.cn/b/wlxt/kj/wlkc_kjxxb/student/do
 getfileinfourl = 'https://learn.tsinghua.edu.cn/b/wlxt/kj/wlkc_kjxxb/student/kjxxbByWlkcidAndSizeForStudent?wlkcid=%s&size=50&_csrf=%s'
 homeworkunhandled = 'https://learn.tsinghua.edu.cn/b/wlxt/kczy/zy/student/zyListWj?_csrf=%s&_csrf=%s'
 unspecifieddata = 'aoData=[{"name":"sEcho","value":1},{"name":"iColumns","value":8},{"name":"sColumns","value":",,,,,,,"},{"name":"iDisplayStart","value":0},{"name":"iDisplayLength","value":"30"},{"name":"mDataProp_0","value":"wz"},{"name":"bSortable_0","value":false},{"name":"mDataProp_1","value":"bt"},{"name":"bSortable_1","value":true},{"name":"mDataProp_2","value":"mxdxmc"},{"name":"bSortable_2","value":true},{"name":"mDataProp_3","value":"zywcfs"},{"name":"bSortable_3","value":true},{"name":"mDataProp_4","value":"kssj"},{"name":"bSortable_4","value":true},{"name":"mDataProp_5","value":"jzsj"},{"name":"bSortable_5","value":true},{"name":"mDataProp_6","value":"jzsj"},{"name":"bSortable_6","value":true},{"name":"mDataProp_7","value":"function"},{"name":"bSortable_7","value":false},{"name":"iSortCol_0","value":5},{"name":"sSortDir_0","value":"desc"},{"name":"iSortCol_1","value":6},{"name":"sSortDir_1","value":"desc"},{"name":"iSortingCols","value":2},{"name":"wlkcid","value":"%s"}]'
+handinhomeworkurl= 'https://learn.tsinghua.edu.cn/f/wlxt/kczy/zy/student/tijiao?wlkcid=%s&xszyid=%s'
+tjzyurl = 'https://learn.tsinghua.edu.cn/b/wlxt/kczy/zy/student/tjzy?_csrf=%s'
 
 
 class THUer(object):
@@ -61,8 +63,11 @@ class THUer(object):
         for _ in coursetemp['resultList']:
             self.courselist.append(course(_['kcm'], _['wlkcid'], self))
 
-    def getallfiledownload(self):
+    def getallfiledownload(self,ignore=[]):
         for c in self.courselist:
+            for i in ignore:
+                if i in c.name:
+                    continue
             c.downloadmyfiles()
 
 
@@ -142,7 +147,16 @@ class homework(object):
         self.handled = handled
 
     def __str__(self) -> str:
-        return '%s %s %s %s' % (self.bt, self.zyid, self.jzsj, self.handled)
+        return '%s %s %s' % (self.bt, self.jzsj, self.handled)
 
-    def handinafile(path:str,zyid):
-        pass
+    def handinafile(self, path:str):
+        url = tjzyurl % (self.parent.parent.cookie['XSRF-TOKEN'], )
+        head = {'referer': handinhomeworkurl % (self.parent.id, self.xszyid)}
+        myfile = {'fileupload':open(path, 'rb')}
+        data = {'xszyid':self.xszyid,'isDeleted':'0','zynr':''}
+        tj = requests.post(url, cookies=self.parent.parent.cookie,data=data, headers=head,files=myfile)
+        print('handing in %s'%(self.bt,))
+        res = json.loads(tj.text)
+        print(res['msg'])
+        # 提交作业以后刷新页面
+        self.parent.parent.login()
